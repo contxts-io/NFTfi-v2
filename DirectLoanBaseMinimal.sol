@@ -300,6 +300,7 @@ abstract contract DirectLoanBaseMinimal is IDirectLoanBase, IPermittedERC20s, Ba
         bytes32 _loanCoordinatorKey,
         address[] memory _permittedErc20s
     ) BaseLoan(_admin) {
+        // 교신한 허브 컨트랙트와 거기서 찾을 coordinator를 만들어놓고 세부 세팅은 거기 가서 찾아보겠다.
         hub = INftfiHub(_nftfiHub);
         LOAN_COORDINATOR = _loanCoordinatorKey;
         for (uint256 i = 0; i < _permittedErc20s.length; i++) {
@@ -420,6 +421,7 @@ abstract contract DirectLoanBaseMinimal is IDirectLoanBase, IPermittedERC20s, Ba
         IDirectLoanCoordinator loanCoordinator = IDirectLoanCoordinator(hub.getContract(LOAN_COORDINATOR));
         loanCoordinator.mintObligationReceipt(_loanId, borrower);
 
+        // borrower 정보를 없애버리고 ObligationReceipt만 남기는 것이다.
         delete loanIdToLoan[_loanId].borrower;
     }
 
@@ -497,6 +499,7 @@ abstract contract DirectLoanBaseMinimal is IDirectLoanBase, IPermittedERC20s, Ba
 
         _payBackLoan(_loanId, borrower, lender, loan);
 
+        // 1)NFT를 에스크로 계좌인 이 컨트랙트에서 원래 주인인 Borrower에게 옮겨준다. 2)loan 관련 통계를 집계하는 데이터들을 수정해준다.
         _resolveLoan(_loanId, borrower, loan, loanCoordinator);
 
         // Delete the loan from storage in order to achieve a substantial gas savings and to lessen the burden of
@@ -521,6 +524,7 @@ abstract contract DirectLoanBaseMinimal is IDirectLoanBase, IPermittedERC20s, Ba
      * @param _loanId  A unique identifier for this particular loan, sourced from the Loan Coordinator.
      */
     function liquidateOverdueLoan(uint32 _loanId) external nonReentrant {
+        // 그냥 보안 상의 로직. 해당 컨트랙트와 제대로 상호작용한 거 맞는지 정합성 체크. 넘어가도 됨.
         LoanChecksAndCalculations.checkLoanIdValidity(_loanId, hub);
         // Sanity check that payBackLoan() and liquidateOverdueLoan() have never been called on this loanId.
         // Depending on how the rest of the code turns out, this check may be unnecessary.
@@ -735,6 +739,7 @@ abstract contract DirectLoanBaseMinimal is IDirectLoanBase, IPermittedERC20s, Ba
     ) internal {
         LoanTerms storage loan = loanIdToLoan[_loanId];
 
+        // 그냥 정합성 체크임. 뭐 만료된 건 없나 등을 살핌.
         (address borrower, address lender) = LoanChecksAndCalculations.renegotiationChecks(
             loan,
             _loanId,
@@ -840,6 +845,7 @@ abstract contract DirectLoanBaseMinimal is IDirectLoanBase, IPermittedERC20s, Ba
     ) internal returns (uint32 loanId) {
         _escrowTokens[_loanTerms.nftCollateralContract][_loanTerms.nftCollateralId] += 1;
 
+        // 레퍼러가 일부 수익을 가져갈 수 있는 시스템이 도입됨.
         uint256 referralfee = LoanChecksAndCalculations.computeReferralFee(
             _loanTerms.loanPrincipalAmount,
             _loanExtras.referralFeeInBasisPoints,
@@ -922,6 +928,9 @@ abstract contract DirectLoanBaseMinimal is IDirectLoanBase, IPermittedERC20s, Ba
             adminFee,
             loanExtras.revenueShareInBasisPoints
         );
+
+        // admin fee를 징수하는데, 이 중에서 revenueSharePartner가 있다면 adminFee에서 일부를 각출해준다.
+        // 아마 NFT를 만든 artist의 wallet으로 향하게 해서 artist의 지속적인 수입에 기여하는 방식으로 이루어지는 듯하다.
         // PermittedPartners contract doesn't allow to set a revenueShareInBasisPoints for address zero so revenuShare
         // > 0 implies that revenueSharePartner ~= address(0), BUT revenueShare can be zero for a partener when the
         // adminFee is low
@@ -1040,6 +1049,7 @@ abstract contract DirectLoanBaseMinimal is IDirectLoanBase, IPermittedERC20s, Ba
             IDirectLoanCoordinator loanCoordinator
         )
     {
+        // 세부 세팅 알고 있는 coordinator를 불러냄.
         loanCoordinator = IDirectLoanCoordinator(hub.getContract(LOAN_COORDINATOR));
         IDirectLoanCoordinator.Loan memory loanCoordinatorData = loanCoordinator.getLoanData(_loanId);
         uint256 smartNftId = loanCoordinatorData.smartNftId;
@@ -1048,16 +1058,20 @@ abstract contract DirectLoanBaseMinimal is IDirectLoanBase, IPermittedERC20s, Ba
         if (loan.borrower != address(0)) {
             borrower = loan.borrower;
         } else {
+            // borrower가 아니라 obligation receipt의 소유자.
             // Fetch current owner of loan obligation note.
             borrower = IERC721(loanCoordinator.obligationReceiptToken()).ownerOf(smartNftId);
         }
         lender = IERC721(loanCoordinator.promissoryNoteToken()).ownerOf(smartNftId);
+
+        // 이렇게 선언만 해줘도 return의 항목들이 생성돼서 리턴된다.
     }
 
     /**
      * @dev Creates a `LoanExtras` struct using data sent as the borrower's extra settings.
      * This is needed in order to avoid stack too deep issues.
      */
+    // 잡다한 레퍼러, 레버뉴쉐어할 사람, 해당 수치 등 정하는 것. 별 거 아님.
     function _setupLoanExtras(address _revenueSharePartner, uint16 _referralFeeInBasisPoints)
         internal
         view
@@ -1077,6 +1091,7 @@ abstract contract DirectLoanBaseMinimal is IDirectLoanBase, IPermittedERC20s, Ba
     /**
      * @dev Calculates the payoff amount and admin fee
      */
+    // 이 함수는 형태만 선언해놓고 DirectLoanFixedOffer에서 상속받아 _payoffAndFee의 내용을 채워놓는다.
     function _payoffAndFee(LoanTerms memory _loanTerms) internal view virtual returns (uint256, uint256);
 
     /**

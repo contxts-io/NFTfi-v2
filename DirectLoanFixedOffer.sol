@@ -98,6 +98,7 @@ contract DirectLoanFixedOffer is DirectLoanBaseMinimal {
      * @param _signature - The components of the lender's signature.
      * @param _borrowerSettings - Some extra parameters that the borrower needs to set when accepting an offer.
      */
+     // v1에서처럼 lender가 대출 조건을 제시하면, 리스트의 여러 오퍼 중에서 borrower가 선택해서 대출이 시행됨.
     function acceptOffer(
         Offer memory _offer,
         Signature memory _signature,
@@ -207,6 +208,7 @@ contract DirectLoanFixedOffer is DirectLoanBaseMinimal {
         override
         returns (uint256 adminFee, uint256 payoffAmount)
     {
+        // 시간 곱하는 로직이 없다! 아직 pro-rata 구현 안 됨.
         // Calculate amounts to send to lender and admins
         uint256 interestDue = _loanTerms.maximumRepaymentAmount - _loanTerms.loanPrincipalAmount;
         adminFee = LoanChecksAndCalculations.computeAdminFee(
